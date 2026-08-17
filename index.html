@@ -59,9 +59,12 @@ body{
   min-height:100vh;
   overflow:hidden;
 }
+.app{
+  width:min(820px,100%);
+}
 .card{
   position:relative;
-  width:min(820px,100%);
+  width:100%;
   background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,0)) , var(--card);
   border:1px solid var(--border);
   border-radius:28px;
@@ -225,10 +228,61 @@ a{color:var(--accent);text-decoration:none}
   line-height:1;
   filter:drop-shadow(0 8px 20px rgba(0,0,0,.35));
 }
+.timer-selector{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  justify-content:flex-start;
+  margin:0 0 16px;
+}
+.timer-selector .timer-pill{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:7px 14px;
+  border-radius:999px;
+  background:rgba(255,255,255,.03);
+  border:1px solid var(--border);
+  color:var(--muted);
+  font-size:13px;
+  font-weight:600;
+  letter-spacing:.2px;
+  text-decoration:none;
+  transition:background .2s,color .2s,border-color .2s,transform .1s;
+}
+.timer-selector .timer-pill:hover{
+  background:var(--accent-soft);
+  color:var(--text);
+  transform:translateY(-1px);
+}
+.timer-selector .timer-pill.active{
+  background:var(--accent-soft);
+  color:var(--accent);
+  border-color:rgba(122,162,247,.5);
+}
+.timer-pill .pill-dot{
+  width:8px;height:8px;border-radius:50%;
+  background:var(--muted);
+  flex:0 0 8px;
+  transition:background .2s, box-shadow .2s;
+}
+.timer-pill .pill-dot.green{
+  background:#22c55e;
+  box-shadow:0 0 8px #22c55e;
+}
+.timer-pill.ended{
+  opacity:.5;
+  color:var(--muted);
+}
+.timer-pill.ended .pill-dot{
+  background:var(--muted);
+}
 </style>
 </head>
 <body>
-<div class="card">
+<div class="app">
+  <div class="timer-selector" id="timerSelector" aria-label="Timer selector"></div>
+  <div class="card">
   <div class="decor a"></div>
   <div class="decor b"></div>
   <div class="grid-bg"></div>
@@ -249,16 +303,49 @@ a{color:var(--accent);text-decoration:none}
     <div class="progress-bar"><div class="progress-bar-fill" id="progressBarFill"></div></div>
     <div class="progress-bar-labels"><span id="progressLabelLeft">0%</span><span id="progressLabelRight">100%</span></div>
   </div>
+  </div>
 </div>
 
 <script>
-// Variables at beginning of file
-const START_DATE = '2026-08-16T16:00:00';
-const END_DATE = '2026-08-20T16:00:00';
-
-const MSG_NOT_STARTED = 'До начала голодовки';
-const MSG_IN_PROGRESS = 'Отсчет до конца голодовки';
-const MSG_ENDED = '🥤🥗🍔🍗🍟🥓';
+// Timers configuration
+const timers = [
+  {
+    id: 'fast',
+    name: 'ГОЛОДОВКА!!!',
+    start: '2026-08-16T16:00:00',
+    end: '2026-08-20T16:00:00',
+    messages: {
+      notStarted: 'До начала голодовки',
+      inProgress: 'Отсчет до конца голодовки',
+      ended: '🐷🐷🍔🍗🍟🥓🐷🐷'
+    },
+    titles: {
+      notStarted: 'Голодовка еще не началась!',
+      inProgress: 'ГОЛОДОВКА!!!! 😫',
+      ended: 'Голодовка завершена!'
+    },
+    units: ['Дней', 'Часов', 'Минут', 'Секунд'],
+    chickenEmoji: '🍔🍗🐷🍗🍔'
+  },
+{
+    id: 'ny',
+    name: 'НОВЫЙ ГОД!!!',
+    start: '2026-01-01T00:00:00',
+    end: '2026-12-31T23:59:59',
+    messages: {
+      notStarted: 'Новый год еще не наступил!',
+      inProgress: 'До нового года осталось',
+      ended: 'НОВЫЙ ГОД!!!! 🎆'
+    },
+    titles: {
+      notStarted: 'Старый год еще не закончился!',
+      inProgress: 'СКОРО НОВЫЙ ГОД!!',
+      ended: 'НОВЫЙ ГОД!!!!!!!!! 🐷🍔🎄'
+    },
+    units: ['Дней', 'Часов', 'Минут', 'Секунд'],
+    chickenEmoji: '🎄🎄🎉🥳🎊🎄🎄'
+  }  
+];
 
 (function initTheme(){
   const root = document.documentElement;
@@ -278,8 +365,7 @@ const MSG_ENDED = '🥤🥗🍔🍗🍟🥓';
   }
 })();
 
-const start = new Date(START_DATE);
-const end = new Date(END_DATE);
+const STORAGE_KEY = 'selectedTimerId';
 
 const titleEl = document.getElementById('title');
 const statusEl = document.getElementById('statusText');
@@ -288,68 +374,227 @@ const dEl = document.getElementById('d');
 const hEl = document.getElementById('h');
 const mEl = document.getElementById('m');
 const sEl = document.getElementById('s');
-
 const progressBarFill = document.getElementById('progressBarFill');
 const progressLabelLeft = document.getElementById('progressLabelLeft');
+const timerSelectorEl = document.getElementById('timerSelector');
+const chickenEl = document.querySelector('.chicken-emoji');
+const unitLabels = document.querySelectorAll('.unit-label');
+const timerContainer = document.getElementById('timer');
+const progressWrap = document.querySelector('.progress-bar-wrap');
+
+function isValidTimerId(id){ return timers.some(t=>t.id===id); }
+
+function parseHash(){ return location.hash.replace(/^#/,''); }
+
+function isEnded(t, now = new Date()){ return now > new Date(t.end); }
+
+function findNextNotEnded(fromIndex, now){
+  const n = timers.length;
+  for(let step = 1; step <= n; step++){
+    const i = (fromIndex + step) % n;
+    if(!isEnded(timers[i], now)) return timers[i];
+  }
+  return null;
+}
+
+function lastEndedTimerId(now){
+  let best = null;
+  timers.forEach(t=>{
+    if(isEnded(t, now)){
+      if(!best || new Date(t.end) > new Date(best.end)) best = t;
+    }
+  });
+  return best ? best.id : null;
+}
+
+function getInitialTimerId(){
+  const now = new Date();
+  // 1. Timer passed in URL
+  const hashId = parseHash();
+  if(hashId && isValidTimerId(hashId)) return hashId;
+
+  // 2. Timer in local storage
+  const stored = localStorage.getItem(STORAGE_KEY);
+  if(stored && isValidTimerId(stored)){
+    const storedIdx = timers.findIndex(t=>t.id===stored);
+    if(isEnded(timers[storedIdx], now)){
+      const next = findNextNotEnded(storedIdx, now);
+      if(next) return next.id;
+      return lastEndedTimerId(now) || stored;
+    }
+    return stored;
+  }
+
+  // 3. No timer in URL or local storage -> first not ended
+  const firstNotEnded = timers.find(t=>!isEnded(t, now));
+  if(firstNotEnded) return firstNotEnded.id;
+
+  // 4. All timers ended -> last ended
+  return lastEndedTimerId(now) || timers[0]?.id;
+}
+
+let currentTimerId = getInitialTimerId();
+let currentTimer = null;
+let start = null;
+let end = null;
+
+function getCurrentTimer(){ return timers.find(t=>t.id===currentTimerId) || timers[0]; }
+
+function renderTimerSelector(){
+  if(!timerSelectorEl) return;
+  timerSelectorEl.innerHTML = '';
+  timers.forEach(t=>{
+    const a = document.createElement('a');
+    a.href = '#'+t.id;
+    a.className = 'timer-pill';
+    a.dataset.timerId = t.id;
+    const dot = document.createElement('span');
+    dot.className = 'pill-dot';
+    const label = document.createElement('span');
+    label.textContent = t.name;
+    a.append(dot, label);
+    a.addEventListener('click', e=>{
+      e.preventDefault();
+      selectTimer(t.id);
+    });
+    timerSelectorEl.appendChild(a);
+  });
+}
+
+function refreshPillStates(){
+  const now = new Date();
+  document.querySelectorAll('#timerSelector .timer-pill').forEach(el=>{
+    const t = timers.find(x=>x.id===el.dataset.timerId);
+    if(!t) return;
+    const ended = isEnded(t, now);
+    const inProgress = !ended && now >= new Date(t.start);
+    el.classList.toggle('ended', ended);
+    const dot = el.querySelector('.pill-dot');
+    if(dot) dot.className = 'pill-dot' + (inProgress ? ' green' : '');
+  });
+}
+
+function updateTimerSelectionUI(){
+  document.querySelectorAll('[data-timer-id]').forEach(el=>{
+    const active = el.dataset.timerId === currentTimerId;
+    el.classList.toggle('active', active);
+    el.setAttribute('aria-current', active ? 'true' : 'false');
+  });
+  refreshPillStates();
+}
+
+function applyTimer(timer){
+  if(!timer){
+    titleEl.textContent = 'No times';
+    statusEl.textContent = 'No times';
+    statusIcon.textContent = '';
+    if(timerContainer) timerContainer.style.display='none';
+    if(progressWrap) progressWrap.style.display='none';
+    if(timerSelectorEl) timerSelectorEl.style.display='none';
+    return;
+  }
+  currentTimer = timer;
+  start = new Date(timer.start);
+  end = new Date(timer.end);
+  if(chickenEl) chickenEl.textContent = timer.chickenEmoji || '';
+  if(timer.units && unitLabels.length){
+    unitLabels.forEach((el,i)=>{ if(timer.units[i]) el.textContent = timer.units[i]; });
+  }
+  updateTimerSelectionUI();
+  update();
+}
+
+function selectTimer(id, {persist=true, updateHash=true}={}){
+  if(!isValidTimerId(id)) return;
+  currentTimerId = id;
+  if(persist) localStorage.setItem(STORAGE_KEY, id);
+  if(updateHash && location.hash.replace(/^#/,'') !== id){
+    history.replaceState(null,'','#' + encodeURIComponent(id));
+  }
+  applyTimer(getCurrentTimer());
+}
 
 function pad(n){ return String(n).padStart(2,'0'); }
 
-function formatDate(dt){
-  return dt.toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'});
-}
-
-function update(){  
+function update(){
+  if(!currentTimer){
+    dEl.textContent = hEl.textContent = mEl.textContent = sEl.textContent = '--';
+    progressBarFill.style.width = '0%';
+    progressLabelLeft.textContent = 'No times';
+    return;
+  }
   const now = new Date();
-
+  refreshPillStates();
   let diff, state;
   if(now < start){
     state = 'not_started';
     diff = start - now;
-    statusEl.textContent = MSG_NOT_STARTED;
-    titleEl.textContent = 'Голодовка еще не началась!';
+    statusEl.textContent = currentTimer.messages.notStarted;
+    titleEl.textContent = currentTimer.titles.notStarted;
     statusIcon.textContent = '⏳';
     statusIcon.className = 'status-icon dim';
   } else if(now >= start && now <= end){
     state = 'in_progress';
     diff = end - now;
-    statusEl.textContent = MSG_IN_PROGRESS;
-    titleEl.textContent = 'ГОЛОДОВКА!!!! 😫';
+    statusEl.textContent = currentTimer.messages.inProgress;
+    titleEl.textContent = currentTimer.titles.inProgress;
     statusIcon.textContent = '🟢';
     statusIcon.className = 'status-icon glow-green';
   } else {
     state = 'ended';
     diff = 0;
-    statusEl.textContent = MSG_ENDED;
-    titleEl.textContent = 'Голодовка завершена!';
+    statusEl.textContent = currentTimer.messages.ended;
+    titleEl.textContent = currentTimer.titles.ended;
     statusIcon.textContent = '🔴';
     statusIcon.className = 'status-icon glow-red';
   }
-
   if(diff < 0) diff = 0;
   const totalSec = Math.floor(diff/1000);
   const days = Math.floor(totalSec / 86400);
   const hours = Math.floor((totalSec % 86400) / 3600);
   const minutes = Math.floor((totalSec % 3600) / 60);
   const seconds = totalSec % 60;
-
   dEl.textContent = pad(days);
   hEl.textContent = pad(hours);
   mEl.textContent = pad(minutes);
   sEl.textContent = pad(seconds);
-
-  // Progress ring + bar
   const total = end - start;
   const elapsed = Math.max(0, Math.min(now - start, total));
   const pct = total > 0 ? Math.max(0, Math.min(100, (elapsed/total)*100)) : 0;
-  const circ = 2 * Math.PI * 34;
-  
   progressBarFill.style.width = `${pct}%`;
-  progressLabelLeft.textContent = `${Math.round(pct)}% голодовки`;
-
+  progressLabelLeft.textContent = `${Math.round(pct)}%`;
 }
 
-update();
-setInterval(update,1000);
+if(timers.length === 0){
+  titleEl.textContent = 'No times';
+  statusEl.textContent = 'No times';
+  statusIcon.textContent = '';
+  if(timerContainer) timerContainer.style.display='none';
+  if(progressWrap) progressWrap.style.display='none';
+  if(timerSelectorEl) timerSelectorEl.style.display='none';
+} else {
+  renderTimerSelector();
+  localStorage.setItem(STORAGE_KEY, currentTimerId);
+  applyTimer(getCurrentTimer());
+  update();
+  setInterval(update,1000);
+}
+
+document.addEventListener('click', e=>{
+  const link = e.target.closest('[data-timer-id]');
+  if(!link) return;
+  e.preventDefault();
+  selectTimer(link.dataset.timerId);
+});
+
+window.addEventListener('hashchange', ()=>{
+  const hashId = parseHash();
+  if(hashId && isValidTimerId(hashId)){
+    currentTimerId = hashId;
+    localStorage.setItem(STORAGE_KEY, hashId);
+    applyTimer(getCurrentTimer());
+  }
+});
 </script>
 </body>
 </html>
