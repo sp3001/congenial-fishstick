@@ -266,6 +266,14 @@ a{color:var(--accent);text-decoration:none}
   flex:0 0 8px;
   transition:background .2s, box-shadow .2s;
 }
+.timer-pill .pill-cat{
+  display:none;
+  font-size:14px;
+  line-height:1;
+}
+.timer-pill.active .pill-cat{
+  display:inline;
+}
 .timer-pill .pill-dot.green{
   background:#22c55e;
   box-shadow:0 0 8px #22c55e;
@@ -476,9 +484,12 @@ function renderTimerSelector(){
     a.dataset.timerId = t.id;
     const dot = document.createElement('span');
     dot.className = 'pill-dot';
+    const cat = document.createElement('span');
+    cat.className = 'pill-cat';
+    cat.textContent = '\u{1F431}\u{FE0E}';
     const label = document.createElement('span');
     label.textContent = t.name;
-    a.append(dot, label);
+    a.append(dot, cat, label);
     a.addEventListener('click', e=>{
       e.preventDefault();
       selectTimer(t.id);
@@ -639,6 +650,23 @@ function update(){
   progressLabelLeft.textContent = `${pct.toFixed(2)}%`;
 }
 
+// Self-correcting loop: aligns ticks to the next second boundary so the
+// display never drifts, skips while the tab is hidden, and refreshes
+// immediately when the tab becomes visible again (fixes 1s freezes and
+// double-updates caused by setInterval throttling).
+let updateTimeoutId = null;
+function scheduleUpdate(){
+  if(updateTimeoutId) clearTimeout(updateTimeoutId);
+  const delay = 1000 - (Date.now() % 1000);
+  updateTimeoutId = setTimeout(()=>{
+    if(!document.hidden) update();
+    scheduleUpdate();
+  }, delay);
+}
+document.addEventListener('visibilitychange', ()=>{
+  if(!document.hidden) update();
+});
+
 if(timers.length === 0){
   titleEl.textContent = 'No times';
   statusEl.textContent = 'No times';
@@ -651,7 +679,7 @@ if(timers.length === 0){
   localStorage.setItem(STORAGE_KEY, currentTimerId);
   applyTimer(getCurrentTimer());
   update();
-  setInterval(update,1000);
+  scheduleUpdate();
 }
 
 document.addEventListener('click', e=>{
