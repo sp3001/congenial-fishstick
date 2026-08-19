@@ -110,6 +110,20 @@ h1{
   letter-spacing:-0.02em; 
 display:flex;justify-content:center;
 }
+h1.bonus-title{
+  position:relative;
+  color:#fde047;
+  animation:bonus-color 2.4s ease-in-out infinite, bonus-pulse 1.6s ease-in-out infinite;
+  filter:drop-shadow(0 0 10px rgba(245,158,11,.55)) drop-shadow(0 0 24px rgba(250,204,21,.35));
+}
+@keyframes bonus-color{
+  0%,100%{color:#fde047;filter:drop-shadow(0 0 10px rgba(245,158,11,.55)) drop-shadow(0 0 24px rgba(250,204,21,.35));}
+  50%{color:#fb923c;filter:drop-shadow(0 0 14px rgba(249,115,22,.7)) drop-shadow(0 0 30px rgba(245,158,11,.45));}
+}
+@keyframes bonus-pulse{
+  0%,100%{transform:scale(1);}
+  50%{transform:scale(1.045);}
+}
 .subtitle{
   margin:0 0 32px;
   color:var(--muted);
@@ -129,14 +143,16 @@ display:flex;justify-content:center;
   text-transform:uppercase;
 }
 .status-icon{
-  font-size:16px;
-  line-height:1;
-  transition:filter .3s ease, transform .3s ease;
+  width:9px;height:9px;
+  flex:0 0 9px;
+  border-radius:50%;
+  background:var(--muted);
+  transition:background .3s ease, filter .3s ease, transform .3s ease;
 }
-.status-icon.glow-green{filter:drop-shadow(0 0 8px #22c55e) drop-shadow(0 0 16px rgba(34,197,94,.5));transform:scale(1.05)}
-.status-icon.glow-red{filter:drop-shadow(0 0 8px #ef4444) drop-shadow(0 0 16px rgba(239,68,68,.5));transform:scale(1.05)}
-.status-icon.glow-yellow{filter:drop-shadow(0 0 8px #eab308) drop-shadow(0 0 16px rgba(234,179,8,.5));transform:scale(1.05)}
-.status-icon.dim{opacity:.7}
+.status-icon.glow-green{background:#22c55e;filter:drop-shadow(0 0 8px #22c55e) drop-shadow(0 0 16px rgba(34,197,94,.5));transform:scale(1.05)}
+.status-icon.glow-red{background:#ef4444;filter:drop-shadow(0 0 8px #ef4444) drop-shadow(0 0 16px rgba(239,68,68,.5));transform:scale(1.05)}
+.status-icon.glow-yellow{background:#eab308;filter:drop-shadow(0 0 8px #eab308) drop-shadow(0 0 16px rgba(234,179,8,.5));transform:scale(1.05)}
+.status-icon.dim{width:auto;height:auto;flex:0 0 auto;background:transparent;font-size:16px;line-height:1;opacity:.85}
 .timer{
   margin-top:28px;
   display:grid;
@@ -325,7 +341,7 @@ a{color:var(--accent);text-decoration:none}
   </div>
   <h1 id="title">Timer</h1>
   <p class="subtitle"></p>
-  <div class="status"><span class="status-icon" id="statusIcon">⏳</span><span id="statusText">Loading…</span></div>
+  <div class="status"><span class="status-icon dim" id="statusIcon">⏳</span><span id="statusText">Loading…</span></div>
   <div class="timer" id="timer">
     <div class="unit"><div class="unit-value" id="d">00</div><div class="unit-label">Дней</div></div>
     <div class="unit"><div class="unit-value" id="h">00</div><div class="unit-label">Часов</div></div>
@@ -346,7 +362,7 @@ const timers = [
     id: 'fast',
     name: 'ГОЛОДОВКА!!!',
     start: '2026-08-16T16:00:00',
-    end: '2026-08-20T16:00:00',
+    end: '2026-08-17T16:00:00',
     endBonus: '2026-08-21T16:00:00',
     messages: {
       notStarted: 'До начала голодовки',
@@ -637,25 +653,26 @@ function update(){
     diff = end - now;
     statusEl.textContent = currentTimer.messages.inProgress;
     titleEl.textContent = currentTimer.titles.inProgress;
-    statusIcon.textContent = '🟢';
+    statusIcon.textContent = '';
     statusIcon.className = 'status-icon glow-green';
   } else if(effectiveEnd > end && now > end && now <= effectiveEnd){
     state = 'bonus';
     diff = effectiveEnd - now;
     statusEl.textContent = currentTimer.messages.bonus || currentTimer.messages.inProgress;
     titleEl.textContent = currentTimer.titles.bonus || currentTimer.titles.inProgress;
-    statusIcon.textContent = '🟡';
+    statusIcon.textContent = '';
     statusIcon.className = 'status-icon glow-yellow';
   } else {
     state = 'ended';
     diff = 0;
     statusEl.textContent = currentTimer.messages.ended;
     titleEl.textContent = currentTimer.titles.ended;
-    statusIcon.textContent = '🔴';
+    statusIcon.textContent = '';
     statusIcon.className = 'status-icon glow-red';
   }
   const bonusEmoji = state === 'bonus' ? (currentTimer.chickenEmojiBonus || currentTimer.chickenEmoji) : currentTimer.chickenEmoji;
   if(chickenEl) chickenEl.textContent = bonusEmoji || '';
+  titleEl.classList.toggle('bonus-title', state === 'bonus');
   if(diff < 0) diff = 0;
   const totalSec = Math.floor(diff/1000);
   const days = Math.floor(totalSec / 86400);
