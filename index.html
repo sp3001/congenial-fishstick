@@ -143,8 +143,8 @@ h1.bonus-title{
   text-transform:uppercase;
 }
 .status-icon{
-  width:9px;height:9px;
-  flex:0 0 9px;
+  width:11px;height:11px;
+  flex:0 0 11px;
   border-radius:50%;
   background:var(--muted);
   transition:background .3s ease, filter .3s ease, transform .3s ease;
@@ -394,7 +394,7 @@ const timers = [
     },
     titles: {
       notStarted: 'Старый год еще не закончился!',
-      inProgress: 'СКОРО НОВЫЙ ГОД!!',
+      inProgress: 'СКОРО НОВЫЙ ГОД!!!',
       ended: 'НОВЫЙ ГОД!!!!!!!!! 🐷🍔🎄'
     },
     units: ['Дней', 'Часов', 'Минут', 'Секунд'],
@@ -585,7 +585,7 @@ function startCatSnow(){
   layer.id = 'catSnowLayer';
   document.body.appendChild(layer);
   spawnCat();
-  catSnowInterval = setInterval(spawnCat, 350);
+  catSnowInterval = setInterval(spawnCat, 200);
   activeEffect = 'cat_snow';
 }
 
